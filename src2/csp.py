@@ -16,10 +16,11 @@ class Constraint:
 
 class CSPModel:
     def __init__(self):
-        self.variables = []  # List of Variable objects
-        self.constraints = []  # List of constraints (represented as functions or data)
+        self.variables = []  # List of variables
+        self.constraints = []  # List of constraints
         self.solution = {}  # Dictionary of variable assignments
 
+    # Copy the model
     @classmethod
     def copy(cls, model):
         new_model = cls()
@@ -28,20 +29,25 @@ class CSPModel:
         new_model.solution = {}
         return new_model
 
+    # Add a variable object to the model
     def add_variable_object(self, variable):
         self.variables.append(variable)
 
+    # Add a constraint object to the model
     def add_constraint_object(self, constraint):
         self.constraints.append(constraint)
 
+    # Add a variable to the model
     def add_variable(self, name, domain):
         variable = Variable(name, domain)
         self.variables.append(variable)
 
+    # Add a constraint to the model
     def add_constraint(self, var1, var2, possible_values):
         constraint = Constraint(var1, var2, possible_values)
         self.constraints.append(constraint)
 
+    # Update the constraints after variable changes were made
     def update_constraints(self):
         for constraint in self.constraints:
             constraint.possible_values = [
@@ -51,6 +57,7 @@ class CSPModel:
                 and j in self.variables[constraint.var2].domain
             ]
 
+    # Print the model
     def print_model(self):
         print("Variables:")
         for variable in self.variables:
@@ -64,11 +71,13 @@ class CSPModel:
             )
         print()
 
+    # Print the variables
     def print_variables(self):
         for variable in self.variables:
             print(f"{variable.name}: {variable.domain}")
         print()
 
+    # Print the constraints
     def print_constraints(self):
         for constraint in self.constraints:
             print(
@@ -76,6 +85,7 @@ class CSPModel:
             )
         print()
 
+    # Print the solution
     def print_solution(self):
         self.solution = dict(sorted(self.solution.items()))
         print(self.solution)
@@ -83,34 +93,51 @@ class CSPModel:
         #    print(f"{self.variables[k].name}: {v}")
         print()
 
+    # Solve the CSP with backtracking with options for forward checking and MAC with AC3
     def backtrack(self, i, fc=False, ac3=False):
+
+        # Add single domain values to the assignment
         self.add_single_domain_values(i)
 
+        # verify if no constraint is violated
         if self.violates_constraint(i):
             return False
 
+        # If the assignment is complete, return the solution
         if self.is_complete(i):
             self.solution = i
-            print("Solution found")
+            # print("Solution found")
             return True
 
+        # Choose an unassigned variable
         x = self.choose_unassigned_variable(i)
+
+        # Try all values in the domain of the variable
         for v in self.variables[x].domain:
             i_prime = self.instantiate(i, x, v)
+
+            # if MAC with AC3 is used, run AC3 at each branch
             if ac3:
-                print("AC3")
+                # print("AC3")
+
+                # Save a copy of the original domains to backtrack
                 original_domains = {var: var.domain[:] for var in self.variables}
                 self.variables[x].domain = [v]
                 if self.ac3():
+                    # use forward checking if the option is picked
                     if fc:
                         if self.forward_checking(i_prime, x, v, ac3=True):
                             return True
                         else:
+
+                            # if the changes don't lead to a solution, revert back to the original domains
                             for var in self.variables:
                                 var.domain = original_domains[var]
                     else:
                         if self.backtrack(i_prime, ac3=True):
                             return True
+
+                        # if the changes don't lead to a solution, revert back to the original domains
                         else:
                             for var in self.variables:
                                 var.domain = original_domains[var]
@@ -118,26 +145,32 @@ class CSPModel:
                     for var in self.variables:
                         var.domain = original_domains[var]
 
+            # use forward checking if the option is picked
             elif fc:
                 original_domains = {var: var.domain[:] for var in self.variables}
                 self.variables[x].domain = [v]
                 if self.forward_checking(i_prime, x, v):
                     return True
                 else:
+                    # if the changes don't lead to a solution, revert back to the original domains
                     for var in self.variables:
                         var.domain = original_domains[var]
+
+            # if no option is picked, use regular backtracking
             else:
                 if self.backtrack(i_prime):
                     return True
 
         return False
 
+    # Add single domain values to the assignment
     def add_single_domain_values(self, i):
         for j, variable in enumerate(self.variables):
             if j not in i:
                 if len(variable.domain) == 1:
                     i[j] = variable.domain[0]
 
+    # Verify if no constraint is violated
     def violates_constraint(self, i):
         for constraint in self.constraints:
             if constraint.var1 in i and constraint.var2 in i:
@@ -147,11 +180,15 @@ class CSPModel:
                     return True
         return False
 
+    # Verify if the assignment is complete
     def is_complete(self, i):
         return len(i) == len(self.variables)
 
+    # Choose an unassigned variable to instantiate
+    # The default is to choose the first unassigned variable
+    # Other options include choosing the variable with the smallest domain
+    # We can add more heuristics here for the choic of variables
     def choose_unassigned_variable(self, i):
-
         # Choose the variable with the smallest domain
         unassigned_variables = [j for j in range(len(self.variables)) if j not in i]
         return min(unassigned_variables, key=lambda x: len(self.variables[x].domain))
@@ -161,11 +198,13 @@ class CSPModel:
             if j not in i:
                 return j
 
+    # Instantiate a variable
     def instantiate(self, i, x, v):
         i_prime = i.copy()
         i_prime[x] = v
         return i_prime
 
+    # AC3 algorithm
     def ac3(self):
         to_test = [i for i in range(len(self.constraints))]
 
@@ -173,6 +212,7 @@ class CSPModel:
             constraint = self.constraints[to_test.pop(0)]
             x = constraint.var1
             y = constraint.var2
+            # revise the domains of x
             if self.reviseX(constraint):
                 if not self.variables[x].domain:
                     # print("Inconsistency detected")
@@ -186,6 +226,7 @@ class CSPModel:
                         elif const.var2 == x and const.var1 != y:
                             to_test.append(i)
 
+            # revise the domains of y
             if self.reviseY(constraint):
                 if not self.variables[y].domain:
                     # print("Inconsistency detected")
@@ -233,9 +274,8 @@ class CSPModel:
 
         return revised
 
+    # Forward checking algorithm
     def forward_checking(self, i, x, vx, ac3=False):
-
-        # Save a copy of the original domains
 
         for constraint in self.constraints:
             if constraint.var1 == x:
@@ -264,6 +304,7 @@ class CSPModel:
         else:
             return False
 
+    # Attempt to implement AC4, but it is not working
     def ac4(self):
         q, s, count = self.init_ac4()
 
