@@ -1,3 +1,6 @@
+import random
+
+import constraint
 from variable import *
 from constraint import *
 
@@ -118,6 +121,8 @@ class Model:
         possible_valor = []
         #travaux sur f et g pour prendre en compte variable déjà instanciée etc
         while len(instance_variable) < len(self.variable) or not verif:
+            if len(instance_variable) > 0:
+                print(instance_variable[0].name)
             if not verif:
                 already_searched_valor[0] = [instance_valor.pop(0)] + already_searched_valor[0]
                 for var in back:
@@ -153,7 +158,7 @@ class Model:
                     return instance_variable, instance_valor
                 else:
                     already_searched_valor = [[]] + already_searched_valor
-                    instance_variable = [f(new_lst)] + instance_variable
+                    instance_variable = [f(new_lst, self.constraint)] + instance_variable
                     instance_valor = [g(instance_variable[0].dom[0:back[instance_variable[0].name][0]])] + instance_valor
                     possible_valor = instance_variable[0].dom[0:back[instance_variable[0].name][0]]
                     verif = self.instance_check(instance_variable, instance_valor)
@@ -191,12 +196,45 @@ class Model:
 #   print("constraint: {} with solution: {}".format((x.name, y.name), con.solution ))
 
 
-def f(lst):
-    return lst[0]
+def f(lst, constraint):
+    count = [0]*len(lst)
+    for con in constraint:
+        x, y = con.variables
+        if x in lst:
+            count[lst.index(x)] +=1
+        if y in lst:
+            count[lst.index(y)] +=1
+    return lst[count.index(max(count))]
+    #return random.choice(lst)
 
 
 def g(lst):
-    return lst[0]
+    #return random.choice(lst)
+    return lst[-1]
+
+def density(con:Constraint, var:Variable, d):
+    x,y = constraint.Variable
+    count= 0
+    if x == var:
+        for sol in con.solution:
+            if sol[0] == d:
+                count +=1
+    else:
+        for sol in con.solution:
+            if sol[1] == d:
+                count +=1
+    return count / len(con.solution)
+
+def max_density(lst,back,constraint):
+    max = 0
+    solution = []
+    for con in constraint:
+        for var in list(set(con.variables).intersection(set(lst))):
+            for sol in var.dom[0:back[var.name][0]]:
+                dens = density(con, var, sol)
+                if dens >= max:
+                    solution = [var, sol]
+    return solution
 
 #lst1 = [1,2,3,4]
 #lst2 = [1,3,5]
@@ -219,15 +257,47 @@ def nqueen(n: int):
 
     return model
 
-model = nqueen(3)
-for var in model.variable:
-    print("variable: {}, domaine: {}".format(var.name, var.dom))
+#model = nqueen(3)
+#for var in model.variable:
+#    print("variable: {}, domaine: {}".format(var.name, var.dom))
 
-for con in model.constraint:
-    x,y = con.variables
-    print("constraint: {}, domaine: {}".format((x.name,y.name), con.solution))
+#for con in model.constraint:
+#    x,y = con.variables
+#    print("constraint: {}, domaine: {}".format((x.name,y.name), con.solution))
 
-instance_variable, instance_valor = model.backtrack(f,g,ac3=True)
+#instance_variable, instance_valor = model.backtrack(f,g,ac3=True)
 
-for i in range(len(instance_variable)):
-    print("variable: {}, resultat: {}".format(instance_variable[i].name, instance_valor[i]))
+#for i in range(len(instance_variable)):
+#    print("variable: {}, resultat: {}".format(instance_variable[i].name, instance_valor[i]))
+
+def con_color(n):
+    dom=[]
+    for i in range(n):
+        for j in range(i+2,n+1):
+            dom += [(i+1, j)]
+            dom += [(j, i+1)]
+    return dom
+
+def graph(link, n,e):
+    file1 = open(link, 'r')
+    Lines = file1.readlines()
+    variables = []
+    for i in range(e):
+        variables += [Variable(nom=i+1, domaine=[i + 1 for i in range(n)])]
+    model = Model(var=variables, con=[])
+    for line in Lines:
+        if line[0] == 'e':
+            lst = line.strip().split(" ")
+            model.addconstraint(con=Constraint(x=variables[int(lst[1])-1], y=variables[int(lst[2])-1], solution=con_color(n)))
+    return model
+
+
+
+
+model = graph("le450_15b.col.txt", n=15,e=450)
+instance_variable, instance_valor = model.backtrack(f,g)
+print(len(instance_variable))
+if len(instance_variable)==450:
+    print("YES")
+else:
+    print("NO")
