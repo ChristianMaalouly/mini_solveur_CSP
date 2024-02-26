@@ -1,6 +1,7 @@
 import random
 
 import constraint
+import time
 from variable import *
 from constraint import *
 
@@ -90,7 +91,7 @@ class Model:
 
         for con in self.constraint:
             if instance_variable[0] in con.variables:
-                y = [var not in instance_variable for var in con.variables]
+                y = list(set(con.variables) - set(instance_variable))
                 if len(y) == 1:
                     for val in y[0].dom[0:back[y[0].name][0]]:
                         if (val, instance_valor[0]) not in con.solution and (
@@ -99,13 +100,20 @@ class Model:
                             back[y[0].name][0] = back[y[0].name][0] - 1
 
 
-    def backtrack(self, f, g, ac3 = False, forward = False):
+    def backtrack(self, f, g, ac3 = False, forward = False, print_back = False, dens= False, pro_int=1000):
 
         #f: function that chose which variable to instantiate
         #g: function that chose at which valor to instantiate
 
         #back = [] * len(self.variable)
         #if a variable is empty return no solution
+        tab = {}
+        if dens:
+            tab = tab_density(self)
+            print("density loaded")
+
+        #starting_time = time.time()
+
         for con in self.constraint:
             if len(con.solution) == 0:
                 return [], []
@@ -116,15 +124,18 @@ class Model:
         #tuple name valor
         instance_variable = []
         instance_valor = []
+        count_instance_valor = {}
         #possible_variables = self.variable
         already_searched_valor = []
         possible_valor = []
+        backtrack = 0
         #travaux sur f et g pour prendre en compte variable déjà instanciée etc
         while len(instance_variable) < len(self.variable) or not verif:
-            if len(instance_variable) > 0:
-                print(instance_variable[0].name)
+            print(len(instance_variable))
             if not verif:
-                already_searched_valor[0] = [instance_valor.pop(0)] + already_searched_valor[0]
+                pop = instance_valor.pop(0)
+                already_searched_valor[0] = [pop] + already_searched_valor[0]
+                count_instance_valor[pop] = count_instance_valor[pop] - 1
                 for var in back:
                     back[var].pop(0)
                 possible_valor = instance_variable[0].dom[0:back[instance_variable[0].name][0]]
@@ -144,12 +155,19 @@ class Model:
 
                     for var in back:
                         back[var] = [back[var][0]] + back[var]
-
-                    instance_valor = [g(list(set(possible_valor) - set(already_searched_valor[0])))] + instance_valor
+                    new_valor = g(list(set(possible_valor) - set(already_searched_valor[0])), count_instance_valor)
+                    instance_valor = [new_valor] + instance_valor
+                    if new_valor in count_instance_valor.keys():
+                        count_instance_valor[new_valor] = count_instance_valor[new_valor] + 1
+                    else:
+                        count_instance_valor[new_valor] = 1
                     # reduction of domain to singleton
                     instance_variable[0].dom[instance_variable[0].dom.index(instance_valor[0])], instance_variable[0].dom[0] = instance_variable[0].dom[0], instance_variable[0].dom[instance_variable[0].dom.index(instance_valor[0])]
                     back[instance_variable[0].name][0] = 1 #+ back[instance_variable[0].name]
                     verif = self.instance_check(instance_variable, instance_valor)
+                    backtrack += 1
+                    if forward:
+                        self.forwardChecking(back, instance_variable, instance_valor)
 
             else:
                 # new variable choice:
@@ -158,31 +176,52 @@ class Model:
                     return instance_variable, instance_valor
                 else:
                     already_searched_valor = [[]] + already_searched_valor
-                    instance_variable = [f(new_lst, self.constraint)] + instance_variable
-                    instance_valor = [g(instance_variable[0].dom[0:back[instance_variable[0].name][0]])] + instance_valor
-                    possible_valor = instance_variable[0].dom[0:back[instance_variable[0].name][0]]
-                    verif = self.instance_check(instance_variable, instance_valor)
-                    for var in back:
-                        back[var] = [back[var][0]] + back[var]
 
-
-
-            #verif si contrainte ok ?
-            #for constraint in self.constraint :
-            #    x,y = constraint
-            #    if x
-            #forward checking or not
-                #ajoute les valeurs dans back
-
+                    if dens and len(instance_variable) < pro_int:
+                        max = max_density(new_lst, back, self.constraint, tab)
+                        if len(max) == 0:
+                            verif = False
+                        else:
+                            [var, sol] = max
+                            #[var, sol] = max_density(new_lst, back, self.constraint, tab)
+                            instance_variable = [var] + instance_variable
+                            instance_valor = [sol] + instance_valor
+                            if sol in count_instance_valor.keys():
+                                count_instance_valor[sol] = count_instance_valor[sol] + 1
+                            else:
+                                count_instance_valor[sol] = 1
+                            verif = self.instance_check(instance_variable, instance_valor)
+                            for var in back:
+                                back[var] = [back[var][0]] + back[var]
+                            if forward:
+                                self.forwardChecking(back, instance_variable, instance_valor)
+                    else:
+                        instance_variable = [profondeur(new_lst, self.constraint, back)] + instance_variable
+                        new_valor2 = g(instance_variable[0].dom[0:back[instance_variable[0].name][0]], count_instance_valor)
+                        instance_valor = [new_valor2] + instance_valor
+                        if new_valor2 in count_instance_valor.keys():
+                            count_instance_valor[new_valor2] = count_instance_valor[new_valor2] + 1
+                        else:
+                            count_instance_valor[new_valor2] = 1
+                        possible_valor = instance_variable[0].dom[0:back[instance_variable[0].name][0]]
+                        verif = self.instance_check(instance_variable, instance_valor)
+                        for var in back:
+                            back[var] = [back[var][0]] + back[var]
+                        if forward:
+                            self.forwardChecking(back, instance_variable, instance_valor)
 
             if ac3:
                 self.ac3(back)
-            if forward:
-                self.forwardChecking(back, instance_variable, instance_valor)
+            #if forward:
+            #    self.forwardChecking(back, instance_variable, instance_valor)
             for i in back:
                 if back[i][0] == 0:
                     verif = False
 
+        if print_back:
+            print("the number of backtrack is: {}".format(backtrack))
+        #end_time = time.time()
+        #print("backtrack executed in: {}s".format(end_time - starting_time))
         return instance_variable, instance_valor
 
 
@@ -196,7 +235,7 @@ class Model:
 #   print("constraint: {} with solution: {}".format((x.name, y.name), con.solution ))
 
 
-def f(lst, constraint):
+def f(lst, constraint, back):
     count = [0]*len(lst)
     for con in constraint:
         x, y = con.variables
@@ -205,34 +244,68 @@ def f(lst, constraint):
         if y in lst:
             count[lst.index(y)] +=1
     return lst[count.index(max(count))]
+
+def profondeur(lst, constraint, back):
+    var_min = lst[0]
+    dom_min = back[var_min.name][0]
+    for var in lst:
+       domaine = back[var.name][0]
+       if domaine < dom_min:
+        var_min = var
+        dom_min = domaine
+    return var_min
+
+
+def g(lst,count_instance_valor):
     #return random.choice(lst)
+    if lst[0] in count_instance_valor.keys():
+        max1 = count_instance_valor[lst[0]]
+    else:
+        if len(count_instance_valor)>1:
+            max1 = max(count_instance_valor)
+        else:
+            max1 = 100000
+    sol = lst[0]
+
+    for val in lst:
+        if val in count_instance_valor.keys():
+            if count_instance_valor[val]<max1:
+                max1 = count_instance_valor[val]
+                sol = val
+    return sol
+    #return min(lst)
 
 
-def g(lst):
-    #return random.choice(lst)
-    return lst[-1]
-
-def density(con:Constraint, var:Variable, d):
-    x,y = constraint.Variable
-    count= 0
+def density(con: Constraint, var: Variable, d):
+    x, y = con.variables
+    count = 0
     if x == var:
         for sol in con.solution:
             if sol[0] == d:
-                count +=1
+                count += 1
     else:
         for sol in con.solution:
             if sol[1] == d:
-                count +=1
+                count += 1
     return count / len(con.solution)
 
-def max_density(lst,back,constraint):
+def tab_density(model):
+    tab = {}
+    for con in model.constraint:
+        for var in con.variables:
+            for d in var.dom:
+                tab[(con, var, d)] = density(con, var, d)
+    return tab
+
+def max_density(lst, back, constraint, tab):
     max = 0
     solution = []
     for con in constraint:
         for var in list(set(con.variables).intersection(set(lst))):
             for sol in var.dom[0:back[var.name][0]]:
-                dens = density(con, var, sol)
+                dens = tab[(con, var, sol)]
                 if dens >= max:
+                    max = dens
                     solution = [var, sol]
     return solution
 
@@ -257,7 +330,7 @@ def nqueen(n: int):
 
     return model
 
-#model = nqueen(3)
+
 #for var in model.variable:
 #    print("variable: {}, domaine: {}".format(var.name, var.dom))
 
@@ -265,7 +338,14 @@ def nqueen(n: int):
 #    x,y = con.variables
 #    print("constraint: {}, domaine: {}".format((x.name,y.name), con.solution))
 
-#instance_variable, instance_valor = model.backtrack(f,g,ac3=True)
+#n=7
+#model = nqueen(n)
+#instance_variable, instance_valor = model.backtrack(f, g, print_back=True, forward=True)
+
+#if len(instance_variable) == n:
+#    print("YES")
+#else:
+#   print("NO")
 
 #for i in range(len(instance_variable)):
 #    print("variable: {}, resultat: {}".format(instance_variable[i].name, instance_valor[i]))
@@ -292,12 +372,13 @@ def graph(link, n,e):
     return model
 
 
+starting_time = time.time()
+model = graph("queen13_13.col", n=13, e=169)
 
-
-model = graph("le450_15b.col.txt", n=15,e=450)
-instance_variable, instance_valor = model.backtrack(f,g)
-print(len(instance_variable))
-if len(instance_variable)==450:
+instance_variable, instance_valor = model.backtrack(f, g,forward=True,print_back=True, pro_int=70)
+end_time = time.time()
+print("solution found in: {}s".format(end_time - starting_time))
+if len(instance_variable)==169:
     print("YES")
 else:
-    print("NO")
+   print("NO")
