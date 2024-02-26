@@ -19,6 +19,7 @@ class CSPModel:
         self.variables = []  # List of variables
         self.constraints = []  # List of constraints
         self.solution = {}  # Dictionary of variable assignments
+        self.counter = 0  # Counter for the number of branches
 
     # Copy the model
     @classmethod
@@ -27,6 +28,7 @@ class CSPModel:
         new_model.variables = copy.deepcopy(model.variables)
         new_model.constraints = copy.deepcopy(model.constraints)
         new_model.solution = {}
+        new_model.counter = 0
         return new_model
 
     # Add a variable object to the model
@@ -89,15 +91,19 @@ class CSPModel:
     def print_solution(self):
         self.solution = dict(sorted(self.solution.items()))
         print(self.solution)
+        print(self.counter)
         # for k, v in self.solution.items():
         #    print(f"{self.variables[k].name}: {v}")
         print()
 
     # Solve the CSP with backtracking with options for forward checking and MAC with AC3
     def backtrack(self, i, fc=False, ac3=False):
+        self.counter += 1
 
         # Add single domain values to the assignment
-        self.add_single_domain_values(i)
+        # This speeds up the algorithm when using AC3, but less efficient for other methods
+        if ac3:
+            self.add_single_domain_values(i)
 
         # verify if no constraint is violated
         if self.violates_constraint(i):
@@ -189,9 +195,29 @@ class CSPModel:
     # Other options include choosing the variable with the smallest domain
     # We can add more heuristics here for the choic of variables
     def choose_unassigned_variable(self, i):
-        # Choose the variable with the smallest domain
+
         unassigned_variables = [j for j in range(len(self.variables)) if j not in i]
         return min(unassigned_variables, key=lambda x: len(self.variables[x].domain))
+        return max(
+            unassigned_variables,
+            key=lambda x: len(
+                [c for c in self.constraints if c.var1 == x or c.var2 == x]
+            ),
+        )
+
+        if len(unassigned_variables) > len(self.variables) / 2:
+            # Choose the variable that has the most constraints
+            return max(
+                unassigned_variables,
+                key=lambda x: len(
+                    [c for c in self.constraints if c.var1 == x or c.var2 == x]
+                ),
+            )
+        else:
+            # Choose the variable with the smallest domain
+            return min(
+                unassigned_variables, key=lambda x: len(self.variables[x].domain)
+            )
 
         # Choose the first unassigned variable
         for j, variable in enumerate(self.variables):
