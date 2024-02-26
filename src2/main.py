@@ -92,11 +92,11 @@ def solve_graph_coloring(file_path, fc=False, ac3=False, start_ac3=False):
 
     model, ub = graph_coloring(file_path)
     lb = 0
-    mb = ub // 2
+    mb = ub * 10 // 12
 
     # Dichotomic search
     while lb != ub:
-
+        print(f"lb: {lb}, mb: {mb}, ub: {ub}")
         # Copy the original model that has all constraints and max domains and update based on the new value of mb
         new_model = CSPModel.copy(model)
         for var in new_model.variables:
@@ -112,11 +112,11 @@ def solve_graph_coloring(file_path, fc=False, ac3=False, start_ac3=False):
         # If the solution is complete, update the upper bound and best solution, else update the lower bound
         if new_model.is_complete(new_model.solution):
             ub = mb
-            mb = (lb + ub) // 2
+            mb = min((lb + ub) * 10 // 12, mb - 1)
             model.solution = new_model.solution
         else:
             lb = mb + 1
-            mb = (lb + ub) // 2
+            mb = (lb + ub) * 10 // 12
 
     print(f"Solution for {file_path}")
     model.print_solution()
@@ -124,29 +124,88 @@ def solve_graph_coloring(file_path, fc=False, ac3=False, start_ac3=False):
     return model, ub
 
 
+def solve_graph_coloring_with_optimal_value(
+    file_path, optimal, fc=False, ac3=False, start_ac3=False
+):
+
+    model, ub = graph_coloring(file_path)
+
+    # Copy the original model that has all constraints and max domains and update based on the new value of optimal
+    new_model = CSPModel.copy(model)
+    for var in new_model.variables:
+        var.domain = [i for i in range(1, optimal + 1)]
+    new_model.update_constraints()
+
+    # Use AC3 at the beginning
+    if start_ac3:
+        new_model.ac3()
+    # Solve the problem with backtracking and options for forward checking and MAC with AC3
+    new_model.backtrack({}, fc=fc, ac3=ac3)
+
+    # If the solution is complete, update the upper bound and best solution, else update the lower bound
+    if new_model.is_complete(new_model.solution):
+        model.solution = new_model.solution
+        model.counter = new_model.counter
+
+    print(f"Solution for {file_path}")
+    model.print_solution()
+    print(f"Chromatic number: {optimal}")
+    return model, ub
+
+
 def main(choice, n, fc, ac3, start_ac3):
 
     if choice == 1:
         start_time = time.time()
-        model = solve_reines(n, fc=True, ac3=False, start_ac3=True)
+        model = solve_reines(n, fc=fc, ac3=ac3, start_ac3=start_ac3)
         print(f"Time: {time.time() - start_time}")
 
     elif choice == 2:
         start_time = time.time()
         model, chromatic_number = solve_graph_coloring(
-            "data/" + n + ".col", fc=True, ac3=False, start_ac3=False
+            "data/" + n + ".col", fc=fc, ac3=ac3, start_ac3=start_ac3
+        )
+        print(f"Time: {time.time() - start_time}")
+
+    elif choice == 3:
+        start_time = time.time()
+        model, chromatic_number = solve_graph_coloring_with_optimal_value(
+            "data/" + n + ".col", optimal, fc=fc, ac3=ac3, start_ac3=start_ac3
         )
         print(f"Time: {time.time() - start_time}")
 
         # model.print_model()
 
 
-choice = int(input("1. Reines\n2. Graph coloring\n"))
+"""
+graphs = ["myciel3", "myciel4", "myciel5", "myciel6", "myciel7"]
+optimal_values = [4, 5, 6, 7, 8]
+
+# for i in [j for j in range(76, 101) if j % 5 == 0]:
+for j in [i for i in range(73) if i % 5 == 0]:
+    # i = graphs[j]
+    # optimal = optimal_values[j]
+    start_time = time.time()
+    # model = solve_graph_coloring_with_optimal_value(
+    #    "data/" + i + ".col", optimal, fc=False, ac3=True, start_ac3=False
+    # )
+    model = solve_reines(j, fc=False, ac3=True, start_ac3=False)
+    print(f"Time: {time.time() - start_time}")
+"""
+
+choice = int(
+    input("1. Reines\n2. Graph coloring\n3. Graph coloring with optimal value\n")
+)
 if choice == 1:
     n = int(input("Enter the number of queens: "))
 elif choice == 2:
     n = input("Enter the file name: ex: myciel3\n")
-fc = input("Forward checking? (y=1/n=0) ")
-ac3 = input("MAC avecAC3? (y=1/n=0) ")
-start_ac3 = input("Start with AC3? (y=1/n=0) ")
+elif choice == 3:
+    n = input("Enter the file name: ex: myciel3\n")
+    optimal = int(input("Enter the optimal chromatic number: "))
+fc = int(input("Forward checking? (y=1/n=0) "))
+ac3 = int(input("MAC avecAC3? (y=1/n=0) "))
+start_ac3 = int(input("Start with AC3? (y=1/n=0) "))
+
+print(f"Choice: {choice}, n: {n}, fc: {fc}, ac3: {ac3}, start_ac3: {start_ac3}")
 main(choice, n, fc, ac3, start_ac3)
