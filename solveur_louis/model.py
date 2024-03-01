@@ -4,6 +4,7 @@ import constraint
 import time
 from variable import *
 from constraint import *
+import lzma
 
 #from variable import Variable
 #from constraint import Constraint
@@ -15,6 +16,7 @@ class Model:
 
     def addconstraint(self, con: Constraint):
         self.constraint = self.constraint + [con]
+
 
     def fusion_constraint(self):
         remove = []
@@ -32,6 +34,7 @@ class Model:
         for index in sorted(remove, reverse=True):
             del self.constraint[index]
 
+
     def alldiff(self, add_nom=0):
         for i in range(len(self.variable)):
             for j in range(i+1, len(self.variable)):
@@ -43,11 +46,8 @@ class Model:
                 new_constraint = Constraint(x=self.variable[i], y=self.variable[j], solution=solution)
                 self.addconstraint(new_constraint)
 
-    def  instance_check(self, instance_variable,instance_valor):
-        #modifier avec back
-        #check if instance is true or not
-        #optimisation : ne check que la dernière variable ajouté
-        #for var in instance_variable:
+
+    def instance_check(self, instance_variable,instance_valor):
         for constraint in self.constraint:
             x, y = constraint.variables
             if x in instance_variable and y in instance_variable:
@@ -57,6 +57,7 @@ class Model:
                     return False
         return True
 
+
     def support(self, con, a, y, lim: int):
         #return True if valor a is supported by y
         for b in y.dom[0:lim]:
@@ -64,13 +65,9 @@ class Model:
                 return True
         return False
 
+
     def ac3(self, back: dict):
-        # add new element problem
-        # prob if domaine = null ?
         test = []
-        #for var in back:
-            # modif original list ?
-        #    var = [var[0]] + var
         for con in self.constraint:
             test = [con] + test
         while len(test) > 0:
@@ -240,9 +237,9 @@ def f(lst, constraint, back):
     for con in constraint:
         x, y = con.variables
         if x in lst:
-            count[lst.index(x)] +=1
+            count[lst.index(x)] += 1
         if y in lst:
-            count[lst.index(y)] +=1
+            count[lst.index(y)] += 1
     return lst[count.index(max(count))]
 
 def profondeur(lst, constraint, back):
@@ -373,12 +370,12 @@ def graph(link, n,e):
 
 
 starting_time = time.time()
-model = graph("queen13_13.col", n=13, e=169)
+model = graph("mulsol.i.2.col", n=31, e=188)
 
-instance_variable, instance_valor = model.backtrack(f, g,forward=True,print_back=True, pro_int=70)
+instance_variable, instance_valor = model.backtrack(f, g,forward=True, dens=True, pro_int=170)
 end_time = time.time()
 print("solution found in: {}s".format(end_time - starting_time))
-if len(instance_variable)==169:
+if len(instance_variable)==188:
     print("YES")
 else:
    print("NO")
